@@ -1,4 +1,3 @@
-# Tạo cửa sổ chính
 root = tk.Tk()
 root.title("Multi-Tool Application")
 root.geometry("600x500")
@@ -86,12 +85,8 @@ tab_tts = ttk.Frame(notebook)
 notebook.add(tab_tts, text="Capcut Text to Speech")
 
 # Nội dung của tab Capcut Text to Speech
-lbl_text = tk.Label(tab_tts, text="Enter Text:")
+lbl_text = tk.Label(tab_tts, text="Đang update...")
 lbl_text.pack(pady=5)
-entry_text = tk.Entry(tab_tts, width=50)
-entry_text.pack(pady=5)
-btn_tts = tk.Button(tab_tts, text="Convert to Speech", command=lambda: print("Converting text to speech..."))
-btn_tts.pack(pady=10)
 
 # Tab 3: Translator
 # Tab 3: Translator
