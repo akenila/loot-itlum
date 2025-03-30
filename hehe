@@ -142,19 +142,30 @@ def process_chunk(chunk, api_key, source_lang, target_lang, selected_model):
     try:
         # Xử lý dịch dựa trên API Type
         if api_type.get() == "Yescale API":
-            openai.api_key = api_key
             prompt = (
                 f"Translate the following text from {source_lang} to {target_lang}.\n"
                 f"Only return the translated text without any additional comments or explanations:\n\n"
                 f"{chunk}"
             )
-            response = openai.ChatCompletion.create(
-                model=selected_model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
+            url = "https://yescale.one/v1/chat/completions"
+            headers = {
+                "authorization": f"Bearer {api_key}",
+                "content-type": "application/json"
+            }
+            payload = {
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant"
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "model": selected_model,
+            }
+            response = requests.post(url, headers=headers, json=payload)
             return response['choices'][0]['message']['content']
         elif api_type.get() == "AI Studio API":
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{selected_model}:generateContent?key={api_key}"
