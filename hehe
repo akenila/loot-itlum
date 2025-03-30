@@ -1,0 +1,327 @@
+# Tạo cửa sổ chính
+root = tk.Tk()
+root.title("Multi-Tool Application")
+root.geometry("600x500")
+
+# Tạo widget Notebook để chứa các tab
+notebook = ttk.Notebook(root)
+
+# Tab 1: Download Video
+tab_download = ttk.Frame(notebook)
+notebook.add(tab_download, text="Download Video")
+
+# Nội dung của tab Download Video
+lbl_url = tk.Label(tab_download, text="Video URL:")
+lbl_url.pack(pady=5)
+entry_url = tk.Entry(tab_download, width=50)
+entry_url.pack(pady=5)
+
+# Nút chọn thư mục lưu video
+download_folder = tk.StringVar(value="Select folder to save video")
+def select_folder():
+    folder = filedialog.askdirectory()
+    if folder:
+        download_folder.set(folder)
+
+btn_select_folder = tk.Button(tab_download, text="Select Folder", command=select_folder)
+btn_select_folder.pack(pady=5)
+
+lbl_folder = tk.Label(tab_download, textvariable=download_folder)
+lbl_folder.pack(pady=5)
+
+# Thanh progress bar
+# Thanh progress bar
+progress = ttk.Progressbar(tab_download, orient="horizontal", length=400, mode="determinate")
+progress.pack(pady=10)
+
+# Label hiển thị phần trăm
+progress_label = tk.Label(tab_download, text="0%")
+progress_label.pack(pady=5)
+
+# Hàm callback để cập nhật progress bar và phần trăm
+def progress_hook(d):
+    if d['status'] == 'downloading':
+        downloaded = d.get('downloaded_bytes', 0)
+        total = d.get('total_bytes', 1)
+        percent = int(downloaded / total * 100)
+        progress['value'] = percent
+        progress_label.config(text=f"{percent}%")  # Cập nhật phần trăm
+        root.update_idletasks()
+
+# Hàm tải video
+def download_video():
+    url = entry_url.get()
+    folder = download_folder.get()
+    if not url:
+        messagebox.showerror("Error", "Please enter a video URL.")
+        return
+    if folder == "Select folder to save video":
+        messagebox.showerror("Error", "Please select a folder to save the video.")
+        return
+
+    def run_download():
+        try:
+            ydl_opts = {
+                'outtmpl': f"{folder}/%(title)s.%(ext)s",  # Đường dẫn lưu video
+                'format': 'bestvideo[height<=720]/best',  # Chọn chất lượng tốt nhất
+                'progress_hooks': [progress_hook],  # Gắn callback để cập nhật tiến trình
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            messagebox.showinfo("Success", "Video downloaded successfully!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to download video: {e}")
+        finally:
+            progress['value'] = 0  # Reset progress bar
+            progress_label.config(text="0%")  # Reset phần trăm
+
+    # Chạy tải video trong luồng riêng
+    threading.Thread(target=run_download, daemon=True).start()
+
+btn_download = tk.Button(tab_download, text="Download", command=download_video)
+btn_download.pack(pady=10)
+
+# Tab 2: Capcut Text to Speech
+tab_tts = ttk.Frame(notebook)
+notebook.add(tab_tts, text="Capcut Text to Speech")
+
+# Nội dung của tab Capcut Text to Speech
+lbl_text = tk.Label(tab_tts, text="Enter Text:")
+lbl_text.pack(pady=5)
+entry_text = tk.Entry(tab_tts, width=50)
+entry_text.pack(pady=5)
+btn_tts = tk.Button(tab_tts, text="Convert to Speech", command=lambda: print("Converting text to speech..."))
+btn_tts.pack(pady=10)
+
+# Tab 3: Translator
+# Tab 3: Translator
+tab_translator = ttk.Frame(notebook)
+notebook.add(tab_translator, text="Translator")
+
+import os
+import threading
+
+# Hàm cập nhật danh sách mô hình dựa trên API Type
+def update_model_list(event):
+    api = api_type.get()
+    if api == "Yescale API":
+        model["values"] = [
+            "gpt-4o", "gpt-4o-2024-05-13", "gpt-4o-2024-08-06",
+            "gpt-4o-mini", "gpt-4o-mini-2024-07-18",
+            "gpt-4-turbo", "gpt-4-turbo-2024-04-09", "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-4-1106-preview",
+            "gpt-4", "gpt-4-0613", "gpt-4-0314",
+            "gpt-3.5-turbo-0125", "gpt-3.5-turbo", "gpt-3.5-turbo-1106", "gpt-3.5-turbo-instruct",
+            "text-embedding-3-large", "text-embedding-3-small", "text-embedding-ada-002"
+        ]
+    elif api == "AI Studio API":
+        model["values"] = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
+    else:
+        model["values"] = []
+
+# Hàm chọn thư mục chứa file .srt
+def select_srt_folder():
+    folder = filedialog.askdirectory()
+    if folder:
+        entry_input_file.delete(0, tk.END)
+        entry_input_file.insert(0, folder)
+
+def select_output_folder():
+    folder = filedialog.askdirectory()
+    if folder:
+        entry_output_dir.delete(0, tk.END)
+        entry_output_dir.insert(0, folder)
+
+# Hàm dịch file .srt
+# Hàm chia nội dung file thành các phần tương đối bằng nhau
+def split_content(content, num_parts):
+    lines = content.splitlines()
+    chunk_size = len(lines) // num_parts
+    chunks = [lines[i * chunk_size:(i + 1) * chunk_size] for i in range(num_parts)]
+    # Thêm phần dư vào chunk cuối cùng
+    if len(lines) % num_parts != 0:
+        chunks[-1].extend(lines[num_parts * chunk_size:])
+    return ["\n".join(chunk) for chunk in chunks]
+
+# Hàm xử lý dịch từng phần của file
+def process_chunk(chunk, api_key, source_lang, target_lang, selected_model):
+    try:
+        # Xử lý dịch dựa trên API Type
+        if api_type.get() == "Yescale API":
+            openai.api_key = api_key
+            prompt = (
+                f"Translate the following text from {source_lang} to {target_lang}.\n"
+                f"Only return the translated text without any additional comments or explanations:\n\n"
+                f"{chunk}"
+            )
+            response = openai.ChatCompletion.create(
+                model=selected_model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response['choices'][0]['message']['content']
+        elif api_type.get() == "AI Studio API":
+            prompt = (
+                f"Translate the following text from {source_lang} to {target_lang}.\n"
+                f"Only return the translated text without any additional comments or explanations:\n\n"
+                f"{chunk}"
+            )
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model=selected_model,
+                contents=prompt,
+            )
+            return response.text
+        else:
+            raise Exception("Invalid API Type selected.")
+    except Exception as e:
+        print(f"Error translating chunk: {e}")
+        return ""
+
+# Hàm xử lý dịch từng file
+# Hàm dịch file .srt
+def translate_files():
+    def process_file(file, api_keys, num_threads):
+        write_log(f"Processing file: {file}")
+        try:
+            input_path = os.path.join(folder, file)
+            output_path = os.path.join(output_dir, file)
+            with open(input_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Chia nội dung file thành các phần
+            chunks = split_content(content, num_threads)
+
+            # Chạy đa luồng để dịch các phần
+            translated_chunks = [None] * len(chunks)
+            def worker(chunk_index, chunk, api_key):
+                translated_chunks[chunk_index] = process_chunk(chunk, api_key, source_lang, target_lang, selected_model)
+
+            threads = []
+            for i, chunk in enumerate(chunks):
+                api_key = random.choice(api_keys)
+                t = threading.Thread(target=worker, args=(i, chunk, api_key))
+                threads.append(t)
+                t.start()
+            for t in threads:
+                t.join()
+
+            # Ghép các phần đã dịch lại
+            translated_content = "\n".join(translated_chunks)
+
+            # Lưu kết quả dịch vào file đầu ra
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(translated_content)
+            write_log(f"Translated {file} to {output_path}")
+        except Exception as e:
+            write_log(f"Error processing file {file}: {e}")
+
+    folder = entry_input_file.get()
+    output_dir = entry_output_dir.get()
+    api_keys = txt_api_key.get("1.0", tk.END).strip().split("\n")
+    selected_model = model.get()
+    source_lang = translate_from.get()
+    target_lang = translate_to.get()
+    num_threads = int(entry_quantity.get() or 1)
+
+    if not folder or not os.path.isdir(folder):
+        messagebox.showerror("Error", "Please select a valid folder containing .srt files.")
+        return
+    if not output_dir or not os.path.isdir(output_dir):
+        messagebox.showerror("Error", "Please select a valid output directory.")
+        return
+    if not api_keys:
+        messagebox.showerror("Error", "Please provide at least one API key.")
+        return
+    if not selected_model:
+        messagebox.showerror("Error", "Please select a model.")
+        return
+
+    # Lấy danh sách file .srt
+    srt_files = [f for f in os.listdir(folder) if f.endswith(".srt")]
+    if not srt_files:
+        messagebox.showerror("Error", "No .srt files found in the selected folder.")
+        return
+
+    # Dịch từng file
+    def run():
+        for file in srt_files:
+            process_file(file, api_keys, num_threads)
+    threading.Thread(target=run).start()
+
+    messagebox.showinfo("Success", "Translation completed!")
+# Nội dung của tab Translator
+# Select API Type
+lbl_api_type = tk.Label(tab_translator, text="Select API Type:")
+lbl_api_type.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+api_type = ttk.Combobox(tab_translator, values=["Yescale API", "AI Studio API"])
+api_type.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+api_type.bind("<<ComboboxSelected>>", update_model_list)
+
+# Input Subtitle Folder
+lbl_input_file = tk.Label(tab_translator, text="Input Subtitle Folder:")
+lbl_input_file.grid(row=1, column=0, padx=5, pady=5, sticky="w")
+entry_input_file = tk.Entry(tab_translator, width=40)
+entry_input_file.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+btn_browse_input = tk.Button(tab_translator, text="Browse", command=select_srt_folder)
+btn_browse_input.grid(row=1, column=2, padx=5, pady=5)
+
+# Output Directory
+lbl_output_dir = tk.Label(tab_translator, text="Output Directory:")
+lbl_output_dir.grid(row=2, column=0, padx=5, pady=5, sticky="w")
+entry_output_dir = tk.Entry(tab_translator, width=40)
+entry_output_dir.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+btn_browse_output = tk.Button(tab_translator, text="Browse", command=select_output_folder)
+btn_browse_output.grid(row=2, column=2, padx=5, pady=5)
+
+# Số lượng luồng
+lbl_quantity = tk.Label(tab_translator, text="Số luồng:")
+lbl_quantity.grid(row=3, column=0, padx=5, pady=5, sticky="w")
+entry_quantity = tk.Entry(tab_translator, width=10)
+entry_quantity.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+
+# API Key
+lbl_api_key = tk.Label(tab_translator, text="API Key (Mỗi key 1 dòng):")
+lbl_api_key.grid(row=4, column=0, padx=5, pady=5, sticky="w")
+txt_api_key = tk.Text(tab_translator, height=4, width=40)
+txt_api_key.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+
+# Dịch ra
+lbl_translate_to = tk.Label(tab_translator, text="Dịch ra:")
+lbl_translate_to.grid(row=5, column=0, padx=5, pady=5, sticky="w")
+translate_to = ttk.Combobox(tab_translator, values=["Tiếng Việt", "English", "Other"])
+translate_to.grid(row=5, column=1, padx=5, pady=5, sticky="w")
+
+# Dịch từ
+lbl_translate_from = tk.Label(tab_translator, text="Dịch từ:")
+lbl_translate_from.grid(row=6, column=0, padx=5, pady=5, sticky="w")
+translate_from = ttk.Combobox(tab_translator, values=["Auto", "Tiếng Việt", "English", "Other"])
+translate_from.grid(row=6, column=1, padx=5, pady=5, sticky="w")
+
+# Mô hình
+lbl_model = tk.Label(tab_translator, text="Mô hình:")
+lbl_model.grid(row=7, column=0, padx=5, pady=5, sticky="w")
+model = ttk.Combobox(tab_translator)
+model.grid(row=7, column=1, padx=5, pady=5, sticky="w")
+
+# Nút bắt đầu dịch
+btn_translate = tk.Button(tab_translator, text="Dịch", command=translate_files)
+btn_translate.grid(row=8, column=0, padx=5, pady=10, sticky="w")
+notebook.pack(expand=1, fill="both")
+
+lbl_log = tk.Label(tab_translator, text="Log:")
+lbl_log.grid(row=9, column=0, padx=5, pady=5, sticky="w")
+txt_log = tk.Text(tab_translator, height=5, width=60, state="disabled")
+txt_log.grid(row=10, column=0, columnspan=3, padx=5, pady=5, sticky="w")
+
+# Hàm ghi log
+def write_log(message):
+    txt_log.config(state="normal")  # Cho phép ghi vào ô log
+    txt_log.insert(tk.END, message + "\n")  # Thêm dòng mới vào log
+    txt_log.see(tk.END)  # Cuộn xuống cuối log
+    txt_log.config(state="disabled")  # Đặt lại chế độ chỉ đọc
+
+
+# Chạy ứng dụng
+root.mainloop()
